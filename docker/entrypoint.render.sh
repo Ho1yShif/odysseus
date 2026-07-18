@@ -35,4 +35,12 @@ if not users:
 PY
 fi
 
+# Seed an OpenAI model endpoint from OPENAI_API_KEY on first boot so chat works
+# out of the box — setting the key alone leaves the model_endpoints table empty,
+# which surfaces as "No chat session active" in the composer. Idempotent (skips
+# if the key is unset or an OpenAI endpoint already exists) and non-fatal: a seed
+# hiccup must not block the deploy — the admin can always add the endpoint from
+# the UI.
+python /app/docker/seed_openai_endpoint.py || true
+
 exec uvicorn app:app --host 0.0.0.0 --port "${PORT:-7000}"

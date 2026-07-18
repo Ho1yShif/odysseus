@@ -41,6 +41,7 @@ To restrict `OPENAI_API_KEY`, a key with only the **Chat completions** (`/v1/cha
 | Variable | Needed for | Where to get it |
 |----------|-----------|-----------------|
 | `OPENAI_API_KEY` | Chat, agents, research (LLM calls) | [platform.openai.com](https://platform.openai.com/api-keys) |
+| `OPENAI_DEFAULT_MODEL` | Model seeded as the default chat on first boot (default `gpt-4o`; change here or in the app) — not a secret | — |
 | `DATA_BRAVE_API_KEY` | Brave web search (optional — SearXNG is bundled) | [brave.com/search/api](https://brave.com/search/api/) |
 | `TAVILY_API_KEY` | Tavily search provider (optional) | [tavily.com](https://tavily.com/) |
 | `SERPER_API_KEY` | Serper search provider (optional) | [serper.dev](https://serper.dev/) |
@@ -55,7 +56,7 @@ Set automatically — no action needed: `ODYSSEUS_ADMIN_PASSWORD` (generated), `
 
 1. Open the `odysseus` service URL once it's live.
 2. Log in as **`admin`**. Your admin password is **created for you automatically** at deploy time — you don't set one. Find it in the Render Dashboard → the `odysseus` service → **Environment** → `ODYSSEUS_ADMIN_PASSWORD` (a strong, randomly generated 256-bit value). Copy it to log in, then change it from the app after first login. It's never printed to the logs.
-3. Open **Chat** and send a message — with `OPENAI_API_KEY` set, you'll get a reply.
+3. Open **Chat** and send a message — with `OPENAI_API_KEY` set, you'll get a reply. On first boot the deploy auto-configures an OpenAI endpoint (default model `OPENAI_DEFAULT_MODEL`), so there's nothing to wire up in the model picker.
 4. Open **Deep Research**, enter a question, and run it. It searches the web through the bundled SearXNG (no extra key) and generates a sourced report — a good end-to-end showcase of the deploy.
 
 ### Scaling for heavy workloads
