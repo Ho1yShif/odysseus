@@ -128,8 +128,8 @@ KNOWN_CONTEXT_WINDOWS = {
     'gpt-4.1': 1047576,
     'gpt-4.1-mini': 1047576,
     'gpt-4.1-nano': 1047576,
-    'gpt-4o': 128000,
-    'gpt-4o-mini': 128000,
+    'gpt-5.6-sol': 128000,
+    'gpt-5.6-sol-mini': 128000,
     'gpt-4-turbo': 128000,
     'gpt-4': 8192,
     'gpt-3.5-turbo': 16385,
@@ -384,7 +384,7 @@ def _proxy_catalog_context(endpoint_url: str, model: str) -> Optional[int]:
 
     if model in cat:
         return cat[model]
-    # Catalog ids may carry a provider prefix (e.g. "openai/gpt-4o") while the
+    # Catalog ids may carry a provider prefix (e.g. "openai/gpt-5.6-sol") while the
     # session stores the bare id; match on the trailing segment as a fallback.
     base = model.split("/")[-1]
     for mid, ctx in cat.items():

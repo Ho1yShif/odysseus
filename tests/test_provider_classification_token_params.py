@@ -26,8 +26,8 @@ class TestUsesMaxCompletionTokens:
         assert _uses_max_completion_tokens(model) is True
 
     @pytest.mark.parametrize("model", [
-        # gpt-4o must NOT be confused with the o-series ("o4"/"o1" tokens).
-        "gpt-4o", "gpt-4o-mini", "gpt-4.1", "claude-opus-4", "llama-3.3-70b",
+        # gpt-5.6-sol must NOT be confused with the o-series ("o4"/"o1" tokens).
+        "gpt-5.6-sol", "gpt-5.6-sol-mini", "gpt-4.1", "claude-opus-4", "llama-3.3-70b",
         "deepseek-chat", "", None,
     ])
     def test_uses_plain_max_tokens(self, model):

@@ -321,7 +321,7 @@ def _rewrite_loopback_for_docker(base_url: str, *, container_local: bool = False
 _PROVIDER_CURATED = {
     "openai": [
         "gpt-5.2", "gpt-5.2-pro", "gpt-5", "gpt-5-pro", "gpt-5-mini", "gpt-5-nano",
-        "gpt-4o", "gpt-4o-mini", "o3", "o4-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+        "gpt-5.6-sol", "gpt-5.6-sol-mini", "o3", "o4-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
         "gpt-image-1.5", "gpt-image-1", "dall-e-3", "tts-1", "whisper-1",
     ],
     "anthropic": [
@@ -602,7 +602,7 @@ _NON_CHAT_CONTAINS = (
     "bge", "llama-guard",
 )
 _NON_CHAT_EXACT_PREFIXES = (
-    "gpt-audio",  # gpt-audio, gpt-audio-mini etc. (not gpt-4o-audio-preview which is chat)
+    "gpt-audio",  # gpt-audio, gpt-audio-mini etc. (not gpt-5.6-sol-audio-preview which is chat)
     "gpt-3.5-turbo-instruct",  # legacy OpenAI completions model
 )
 

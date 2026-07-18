@@ -4941,7 +4941,7 @@
   "release_date": null
  },
  {
-  "name": "tartuNLP/Llammas-base-p1-GPT-4o-human-error-mix-paragraph-GEC",
+  "name": "tartuNLP/Llammas-base-p1-gpt-5.6-sol-human-error-mix-paragraph-GEC",
   "provider": "tartunlp",
   "parameter_count": "6.7B",
   "parameters_raw": 6738415616,

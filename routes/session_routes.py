@@ -739,7 +739,7 @@ def setup_session_routes(
             if model:
                 # Contains match (mirrors the name filter above). The old
                 # f"%{model}" was a SUFFIX-only match, so filtering by "gpt-4"
-                # dropped "gpt-4o" and over-matched on shared suffixes; it also
+                # dropped "gpt-5.6-sol" and over-matched on shared suffixes; it also
                 # left LIKE wildcards in the user value unescaped.
                 safe_model = model.replace('%', r'\%').replace('_', r'\_')
                 q = q.filter(DbSession.model.ilike(f"%{safe_model}%", escape='\\'))
@@ -878,7 +878,7 @@ def setup_session_routes(
     def create_session_openai(
         request: Request,
         name: str = Form("New Chat (OpenAI)"),
-        model: str = Form("gpt-4o"),
+        model: str = Form("gpt-5.6-sol"),
         rag: str = Form(None)
     ):
         if not OPENAI_API_KEY:

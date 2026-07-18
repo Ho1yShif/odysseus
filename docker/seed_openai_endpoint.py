@@ -51,7 +51,7 @@ from src.settings import load_settings, save_settings
 # Tables + migrations are idempotent; the app re-runs init_db() at startup.
 init_db()
 
-_model = (os.getenv("OPENAI_DEFAULT_MODEL") or "gpt-4o").strip() or "gpt-4o"
+_model = (os.getenv("OPENAI_DEFAULT_MODEL") or "gpt-5.6-sol").strip() or "gpt-5.6-sol"
 
 db = SessionLocal()
 try:

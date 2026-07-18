@@ -22,7 +22,7 @@ def test_reasoning_models_restrict_temperature(model):
 
 @pytest.mark.parametrize(
     "model",
-    ["gpt-4o", "gpt-4.1", "gpt-3.5-turbo", "gpt-4.5-preview",
+    ["gpt-5.6-sol", "gpt-4.1", "gpt-3.5-turbo", "gpt-4.5-preview",
      "claude-3-5-sonnet", "llama3.1", "", None],
 )
 def test_normal_models_allow_temperature(model):
@@ -74,7 +74,7 @@ def test_kimi_for_coding_payload_omits_temperature(monkeypatch):
 
 
 def test_normal_model_payload_keeps_temperature(monkeypatch):
-    payload = _capture_openai_payload(monkeypatch, "gpt-4o", 0.2)
+    payload = _capture_openai_payload(monkeypatch, "gpt-5.6-sol", 0.2)
     assert payload["temperature"] == 0.2
     assert payload["max_tokens"] == 5
 
@@ -82,7 +82,7 @@ def test_normal_model_payload_keeps_temperature(monkeypatch):
 def test_normal_model_payload_keeps_temperature_above_one(monkeypatch):
     # OpenAI/local providers may validly use temperatures above 1.0; the clamp
     # is Anthropic-only and must not touch this path.
-    payload = _capture_openai_payload(monkeypatch, "gpt-4o", 1.2)
+    payload = _capture_openai_payload(monkeypatch, "gpt-5.6-sol", 1.2)
     assert payload["temperature"] == 1.2
 
 

@@ -41,7 +41,7 @@ To restrict `OPENAI_API_KEY`, a key with only the **Chat completions** (`/v1/cha
 | Variable | Needed for | Where to get it |
 |----------|-----------|-----------------|
 | `OPENAI_API_KEY` | Chat, agents, research (LLM calls) | [platform.openai.com](https://platform.openai.com/api-keys) |
-| `OPENAI_DEFAULT_MODEL` | Model seeded as the default chat on first boot (default `gpt-4o`; change here or in the app) — not a secret | — |
+| `OPENAI_DEFAULT_MODEL` | Model seeded as the default chat on first boot (default `gpt-5.6-sol`; change here or in the app) — not a secret | — |
 | `DATA_BRAVE_API_KEY` | Brave web search (optional — SearXNG is bundled) | [brave.com/search/api](https://brave.com/search/api/) |
 | `TAVILY_API_KEY` | Tavily search provider (optional) | [tavily.com](https://tavily.com/) |
 | `SERPER_API_KEY` | Serper search provider (optional) | [serper.dev](https://serper.dev/) |

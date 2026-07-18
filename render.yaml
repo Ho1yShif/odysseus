@@ -60,7 +60,7 @@ projects:
               - key: OPENAI_API_KEY
                 sync: false
               - key: OPENAI_DEFAULT_MODEL
-                value: gpt-4o          # seeds the default chat model on first boot; change here or in the app
+                value: gpt-5.6-sol          # seeds the default chat model on first boot; change here or in the app
               - key: DATA_BRAVE_API_KEY
                 sync: false
               - key: TAVILY_API_KEY
