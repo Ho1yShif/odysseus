@@ -84,7 +84,7 @@ Set automatically — no action needed: `ODYSSEUS_ADMIN_PASSWORD` (generated), `
 
 | Variable | Default | What it caps |
 |---|---|---|
-| `DEMO_MODEL` | `gpt-4.1-nano` | the pinned (cheap) chat model |
+| `DEMO_MODEL` | `gpt-5.6-luna` | the pinned (cheap) chat model |
 | `DEMO_MAX_OUTPUT_TOKENS` | `512` | output tokens per reply |
 | `DEMO_RATE_LIMIT_PER_MINUTE` | `10` | chat sends per minute, per visitor+IP |
 | `DEMO_MAX_MESSAGES_PER_SESSION` | `30` | total messages per visitor session |

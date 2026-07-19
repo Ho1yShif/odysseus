@@ -80,7 +80,7 @@ def _resp(status, *, json=None, headers=None, url="https://api.example.com/v1/mo
 
 class TestModelListHelpers:
     @pytest.mark.parametrize("data,expected", [
-        ({"data": [{"id": "gpt-5.6-sol"}, {"id": "gpt-5.6-sol-mini"}]}, ["gpt-5.6-sol", "gpt-5.6-sol-mini"]),
+        ({"data": [{"id": "gpt-5.6-sol"}, {"id": "gpt-5.6-luna"}]}, ["gpt-5.6-sol", "gpt-5.6-luna"]),
         ({"data": [{"id": None}, {"id": 123}, {"id": "gpt-5.6-sol"}]}, ["gpt-5.6-sol"]),  # non-string ids dropped
         ({"data": ["x", {"id": "ok"}]}, ["ok"]),                                # non-dict entries dropped
         ({"data": []}, []),
@@ -111,9 +111,9 @@ class TestProbeEndpointParsing:
         monkeypatch.setattr(
             model_routes.httpx, "get",
             lambda url, headers=None, timeout=None, verify=None, **kwargs: _resp(
-                200, json={"data": [{"id": "gpt-5.6-sol"}, {"id": "gpt-5.6-sol-mini"}]}),
+                200, json={"data": [{"id": "gpt-5.6-sol"}, {"id": "gpt-5.6-luna"}]}),
         )
-        assert _probe_endpoint("https://api.example.com/v1", "key") == ["gpt-5.6-sol", "gpt-5.6-sol-mini"]
+        assert _probe_endpoint("https://api.example.com/v1", "key") == ["gpt-5.6-sol", "gpt-5.6-luna"]
 
     def test_parses_ollama_models_format(self, monkeypatch):
         _patch_resolve(monkeypatch)

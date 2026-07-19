@@ -338,7 +338,24 @@ def setup_session_routes(
         user = effective_user(request)
         endpoint_api_key = ""
         endpoint_base_url = ""
-        _reject_raw_endpoint_url_for_non_admin(request, user, endpoint_id, endpoint_url)
+        # Demo visitors own no ModelEndpoint rows, and apply_demo_session_config
+        # force-pins every demo session to the env key + DEMO_MODEL on each read
+        # (see chat_routes). Discard whatever endpoint the composer posted, pin
+        # the trusted demo pair here, and skip validation + the raw-URL guard:
+        # the client URL is inert (never dialed) and the guard would otherwise
+        # 403 a non-admin demo owner out of ever creating the session — the bug
+        # behind the "No chat session active" composer message.
+        from src.demo import DEMO_MODE, is_demo_owner, OPENAI_CHAT_URL, DEMO_MODEL
+        _is_demo_req = DEMO_MODE and (
+            getattr(request.state, "is_demo", False) or is_demo_owner(user)
+        )
+        if _is_demo_req:
+            endpoint_id = ""
+            endpoint_url = OPENAI_CHAT_URL
+            model = DEMO_MODEL
+            skip_val = True
+        else:
+            _reject_raw_endpoint_url_for_non_admin(request, user, endpoint_id, endpoint_url)
         if endpoint_id and endpoint_id.strip():
             from core.database import ModelEndpoint
             from src.auth_helpers import owner_filter

@@ -2,7 +2,7 @@
 
 list_archived_sessions filtered with DbSession.model.ilike(f"%{model}") - a
 suffix match. Filtering by "gpt-4" therefore returned "openai/gpt-4" but
-silently DROPPED "gpt-5.6-sol" (contains but does not end with the value), and
+silently DROPPED "gpt-4.1" (contains but does not end with the value), and
 over-matched models that merely share the suffix. The sibling name filter
 already uses a wildcard-escaped contains match.
 """
@@ -81,10 +81,10 @@ def _seed(owner, *models):
 
 
 def test_contains_match_returns_all_models_sharing_the_substring(archived_endpoint):
-    _seed("alice", "openai/gpt-4", "gpt-5.6-sol", "claude-3")
+    _seed("alice", "openai/gpt-4", "gpt-4.1", "claude-3")
     res = archived_endpoint(request=None, model="gpt-4")
     got = {s["model"] for s in res["sessions"]}
-    assert got == {"openai/gpt-4", "gpt-5.6-sol"}
+    assert got == {"openai/gpt-4", "gpt-4.1"}
 
 
 def test_exact_full_model_still_matches(archived_endpoint):

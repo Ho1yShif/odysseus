@@ -17,7 +17,7 @@ import pytest
 def demo(monkeypatch):
     """Reload src.demo with DEMO=true so DEMO_MODE and the limiter are live."""
     monkeypatch.setenv("DEMO", "true")
-    monkeypatch.setenv("DEMO_MODEL", "gpt-4.1-nano")
+    monkeypatch.setenv("DEMO_MODEL", "gpt-5.6-luna")
     monkeypatch.setenv("DEMO_RATE_LIMIT_PER_MINUTE", "10")
     monkeypatch.setenv("DEMO_MAX_MESSAGES_PER_SESSION", "3")
     monkeypatch.setenv("DEMO_MAX_OUTPUT_TOKENS", "512")
@@ -175,3 +175,87 @@ def test_persist_message_skipped_for_demo_owner(demo, monkeypatch):
     # Nothing written to disk for a demo owner.
     db.add.assert_not_called()
     db.commit.assert_not_called()
+
+
+# --- composer bootstrap (GET /api/default-chat) -----------------------------
+def _demo_default_chat_client(current_user):
+    """Mount the model router with a middleware that authenticates every request
+    as ``current_user`` (a demo owner), matching what the real AuthMiddleware
+    sets for a demo visitor. The demo branch of get_default_chat returns before
+    any DB/settings access, so a MagicMock discovery is enough."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from routes.model_routes import setup_model_routes
+
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def _auth(request, call_next):
+        request.state.current_user = current_user
+        request.state.is_demo = True
+        return await call_next(request)
+
+    app.include_router(setup_model_routes(MagicMock()))
+    return TestClient(app)
+
+
+def test_default_chat_returns_pinned_demo_config_for_demo_visitor(demo, monkeypatch):
+    # Regression: a demo visitor owns no endpoints and has no prefs, so the
+    # owner-scoped resolution returned {} and the composer showed "No chat
+    # session active". The demo branch must hand back the pinned demo pair so
+    # the frontend can create the session (apply_demo_session_config then
+    # overrides it to the env key on read).
+    client = _demo_default_chat_client("demo-" + "f" * 32)
+    body = client.get("/api/default-chat").json()
+    assert body["endpoint_url"] == demo.OPENAI_CHAT_URL
+    assert body["model"] == demo.DEMO_MODEL
+
+
+# --- session creation (POST /api/session) -----------------------------------
+def test_create_session_pins_demo_config_and_discards_client_url(demo, monkeypatch):
+    # A demo owner is a non-admin, so the raw-URL SSRF guard would 403 the
+    # composer's POST /api/session (which sends a raw endpoint_url, no
+    # endpoint_id) and the demo could never create a session. The demo branch
+    # must skip that guard AND overwrite whatever URL the client posted with the
+    # trusted pinned pair, so a hostile demo client can't steer the server at a
+    # raw internal URL either.
+    import routes.session_routes as sr
+    from unittest.mock import MagicMock
+
+    demo_owner = "demo-" + "a" * 32
+    monkeypatch.setattr(sr, "effective_user", lambda request: demo_owner)
+
+    created = SimpleNamespace(name="demo chat", headers={})
+    sm = MagicMock()
+    sm.create_session.return_value = created
+
+    router = sr.setup_session_routes(sm, {})
+    # session_routes uses a module-level APIRouter, so every setup call appends
+    # to the same shared route list. Take the LAST /api/session POST — the one
+    # this call just registered, bound to our `sm` — not a stale one another
+    # test left behind.
+    create = next(
+        r.endpoint for r in reversed(router.routes)
+        if getattr(r, "path", "") == "/api/session"
+        and "POST" in getattr(r, "methods", set())
+    )
+
+    request = SimpleNamespace(state=SimpleNamespace(current_user=demo_owner, is_demo=True))
+    # Client posts a raw internal URL with no endpoint_id — exactly the shape
+    # the raw-URL guard is built to reject for non-admins.
+    resp = create(
+        request=request,
+        name="demo chat",
+        endpoint_url="http://169.254.169.254/latest/meta-data",
+        model="gpt-4-turbo",
+        rag=None,
+        skip_validation=None,
+        api_key="",
+        endpoint_id="",
+    )
+
+    # No 403, and the SSRF URL was discarded in favor of the pinned demo pair.
+    assert resp.model == demo.DEMO_MODEL
+    _, kwargs = sm.create_session.call_args
+    assert kwargs["endpoint_url"] == demo.OPENAI_CHAT_URL
+    assert kwargs["model"] == demo.DEMO_MODEL

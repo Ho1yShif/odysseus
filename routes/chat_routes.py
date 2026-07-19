@@ -780,15 +780,15 @@ def setup_chat_routes(
         allow_tool_preprocessing = not pre_context_tool_policy.block_all_tool_calls
 
         # Demo lockdown — force plain chat before build_chat_context runs, since
-        # it (and auto-escalation above) can web-preprocess / attach docs BEFORE
-        # the per-tool privilege gate fires. Belt-and-suspenders with
-        # DEMO_PRIVILEGES: this kills every spend/escalation surface for the turn.
+        # it (and auto-escalation above) can attach docs / run tools BEFORE the
+        # per-tool privilege gate fires. Belt-and-suspenders with DEMO_PRIVILEGES:
+        # this kills the write/execute/escalation surfaces for the turn.
+        # Web search is intentionally NOT disabled here — demo visitors may use
+        # it; the turn's `use_web` / `allow_web_search` flags are honored as-is.
         if is_demo_owner(owner):
             chat_mode = "chat"
             auto_escalated = False
             _tool_intent = None
-            use_web = "false"
-            allow_web_search = "false"
             use_research = "false"
             use_rag = "false"
             do_research = False

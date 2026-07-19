@@ -60,7 +60,7 @@ DEMO_OWNER_PREFIX = "demo-"            # owner ids look like demo-<32 hex uuid>
 _TOKEN_RE = re.compile(r"^[0-9a-f]{32}$")
 
 # --- Pinned model + endpoint (env key, never persisted) ---------------------
-DEMO_MODEL = (os.getenv("DEMO_MODEL", "").strip() or "gpt-4.1-nano")
+DEMO_MODEL = (os.getenv("DEMO_MODEL", "").strip() or "gpt-5.6-luna")
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 # --- Usage limits (only consulted when DEMO_MODE). 0 disables the dimension. -
