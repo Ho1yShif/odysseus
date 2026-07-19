@@ -235,13 +235,19 @@ class SessionManager:
 
             # Demo history is ephemeral: keep it in the in-memory SessionManager
             # cache only and never write a stranger's chat to the deployer's
-            # disk. Lazy import avoids a src.demo -> core cycle.
+            # disk. Lazy import avoids a src.demo -> core cycle. Scope the guard
+            # to the import: a swallowed error would fail OPEN (persist a
+            # stranger's chat), so fall back to the owner-prefix check inline —
+            # matching src.demo.is_demo_owner — rather than dropping the guard.
+            _owner = getattr(db_session, "owner", None)
             try:
                 from src.demo import is_demo_owner
-                if is_demo_owner(getattr(db_session, "owner", None)):
-                    return
-            except Exception:
-                pass
+                _is_demo = is_demo_owner(_owner)
+            except Exception as e:
+                logger.warning("Demo owner check unavailable, using prefix fallback: %s", e)
+                _is_demo = bool(_owner) and str(_owner).startswith("demo-")
+            if _is_demo:
+                return
 
             missing_upload_id = reserve_message_upload_references(
                 getattr(self, "upload_handler", None),

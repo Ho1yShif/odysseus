@@ -387,13 +387,17 @@ class AuthManager:
         # Demo owners (demo-<uuid>) get the least-privilege profile regardless of
         # any stored config — they have no user row anyway. This is the single
         # choke point that drives per-tool enforcement in chat_routes. Lazy
-        # import keeps src.demo from importing core.auth (cycle).
+        # import keeps src.demo from importing core.auth (cycle). Scope the guard
+        # to the import only: a swallowed error here would fail OPEN (a demo owner
+        # falling through to the more-permissive default profile), so surface it
+        # rather than hiding it.
         try:
             from src.demo import is_demo_owner, DEMO_PRIVILEGES
+        except Exception as e:
+            logger.warning("Demo privilege check unavailable, falling back to default profile: %s", e)
+        else:
             if is_demo_owner(username):
                 return {**DEFAULT_PRIVILEGES, **DEMO_PRIVILEGES}
-        except Exception:
-            pass
         user = self.users.get(username, {})
         if user.get("is_admin"):
             return dict(ADMIN_PRIVILEGES)

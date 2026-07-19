@@ -84,7 +84,7 @@ projects:
               - key: DEMO
                 value: "false"        # opt-in; not a secret. "true"/"1"/"yes" turns it on.
               - key: DEMO_MODEL
-                value: gpt-4.1-nano   # cheap current OpenAI tier for the demo path (env OPENAI_API_KEY)
+                value: gpt-5.6-luna   # cheap current OpenAI tier for the demo path (env OPENAI_API_KEY)
               - key: DEMO_RATE_LIMIT_PER_MINUTE
                 value: "10"           # chat requests/min per visitor+IP; 0 disables this dimension
               - key: DEMO_MAX_MESSAGES_PER_SESSION

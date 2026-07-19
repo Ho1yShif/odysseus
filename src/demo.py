@@ -169,7 +169,9 @@ def apply_demo_session_config(session) -> None:
 
 # --- Rate + per-session message limits --------------------------------------
 _rate_limiter = None
-if DEMO_RATE_LIMIT_PER_MINUTE > 0:
+# Gate on DEMO_MODE too: a normal fork imports this module (via app.py) but must
+# stay inert, so don't build a limiter it will never consult.
+if DEMO_MODE and DEMO_RATE_LIMIT_PER_MINUTE > 0:
     from src.rate_limiter import RateLimiter
     _rate_limiter = RateLimiter(max_requests=DEMO_RATE_LIMIT_PER_MINUTE, window_seconds=60)
 
