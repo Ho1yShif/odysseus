@@ -178,6 +178,28 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         token = request.cookies.get(SESSION_COOKIE)
         result = auth_manager.status(token)
         result["signup_enabled"] = auth_manager.signup_enabled
+        # Demo visitors reach this route (it's auth-exempt) with no session
+        # token, so auth_manager.status() reports them unauthenticated. When
+        # DEMO mode is on and the visitor carries a well-formed demo cookie,
+        # surface a synthetic authenticated status + the locked-down privilege
+        # profile so the SPA renders the chat UI (and hides disabled controls)
+        # instead of gating on login. This route is auth-exempt and runs BEFORE
+        # the middleware demo path, so resolve the demo owner from the cookie
+        # directly here.
+        try:
+            from src.demo import DEMO_MODE, resolve_demo_owner, is_demo_owner
+            if DEMO_MODE and not result.get("authenticated"):
+                owner, _new = resolve_demo_owner(request)
+                if is_demo_owner(owner):
+                    result["configured"] = True
+                    result["authenticated"] = True
+                    result["username"] = owner
+                    result["is_admin"] = False
+                    result["demo"] = True
+                    result["privileges"] = auth_manager.get_privileges(owner)
+                    return result
+        except Exception:
+            pass
         # Include the caller's effective privileges so the frontend can
         # hide / dim UI controls the user isn't allowed to use. Admins get
         # ADMIN_PRIVILEGES (everything on), regular users get their stored

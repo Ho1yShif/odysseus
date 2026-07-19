@@ -59,6 +59,40 @@ Set automatically — no action needed: `ODYSSEUS_ADMIN_PASSWORD` (generated), `
 3. Open **Chat** and send a message — with `OPENAI_API_KEY` set, you'll get a reply. On first boot the deploy auto-configures an OpenAI endpoint (default model `OPENAI_DEFAULT_MODEL`), so there's nothing to wire up in the model picker.
 4. Open **Deep Research**, enter a question, and run it. It searches the web through the bundled SearXNG (no extra key) and generates a sourced report — a good end-to-end showcase of the deploy.
 
+> Want to let strangers try the app without an admin password? See **[Demo mode](#demo-mode)** below — a public, no-signup chat surface you can turn on with `DEMO=true`. It's **off by default**, so a fresh deploy stays fully authenticated.
+
+## Demo mode
+
+`DEMO=true` runs a **public, no-signup, locked-down chat demo** on **your** OpenAI key — so anyone with the URL can try the chat without logging in. It is **off by default** (`DEMO=false`): a fresh fork or deploy gets the full authenticated app, unchanged. Only a deliberate `DEMO=true` turns it on.
+
+**How it works.** With the flag on, the login gate opens *for chat only*. Each visitor gets an isolated, ephemeral demo session (an unguessable per-visitor cookie → a synthetic owner) under a least-privilege profile. Everything else — settings, admin, integrations, and every other API route — still requires the admin login exactly as before. The admin account and its password are untouched.
+
+**What the demo can and can't do:**
+
+| Capability | In demo |
+|---|---|
+| Chat (pinned cheap model, capped output) | ✅ on |
+| Shell / code / file tools | ❌ off |
+| File upload & personal-doc RAG | ❌ off |
+| Image generation, TTS / STT | ❌ off |
+| Deep research | ❌ off (expensive per run) |
+| Email, MCP servers, cookbook, task scheduler | ❌ off |
+| Memory writes, API-token minting | ❌ off |
+| Settings / admin / integrations | ❌ off (admin login still required) |
+
+**Abuse & cost limits** (demo-only; the demo spends **your** key, so watch your [OpenAI usage console](https://platform.openai.com/usage)):
+
+| Variable | Default | What it caps |
+|---|---|---|
+| `DEMO_MODEL` | `gpt-4.1-nano` | the pinned (cheap) chat model |
+| `DEMO_MAX_OUTPUT_TOKENS` | `512` | output tokens per reply |
+| `DEMO_RATE_LIMIT_PER_MINUTE` | `10` | chat sends per minute, per visitor+IP |
+| `DEMO_MAX_MESSAGES_PER_SESSION` | `30` | total messages per visitor session |
+
+Raise or lower these in the deploy form / `render.yaml`. Set a limit to `0` to disable that one dimension; an unset variable falls back to the default (it **never** means "unlimited"). When a visitor hits a cap they get a friendly "deploy your own to keep going" reply — never an error.
+
+**Session isolation & privacy.** Visitors can't see each other's chats (each is scoped to its own synthetic owner), and demo history is **ephemeral** — it lives in memory only and is never written to the deployer's disk. If you host a public demo URL, add a visible "public demo, may reset — don't submit anything sensitive" notice.
+
 ### Scaling for heavy workloads
 
 The Blueprint defaults the web service to `standard` (2 GB). Odysseus can be resource-hungry under heavy use — large deep-research runs, big documents, sizable embedding jobs, or many concurrent sessions. For those workloads, give the instance more resources: in the Render Dashboard, open the `odysseus` service → **Settings → Instance Type** and pick a larger plan (and bump `odysseus-chromadb` too if your vector store grows). You can downgrade later if the smaller plan proves sufficient.

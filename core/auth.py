@@ -384,6 +384,16 @@ class AuthManager:
 
     def get_privileges(self, username: str) -> Dict[str, Any]:
         """Get privileges for a user. Admins get all privileges."""
+        # Demo owners (demo-<uuid>) get the least-privilege profile regardless of
+        # any stored config — they have no user row anyway. This is the single
+        # choke point that drives per-tool enforcement in chat_routes. Lazy
+        # import keeps src.demo from importing core.auth (cycle).
+        try:
+            from src.demo import is_demo_owner, DEMO_PRIVILEGES
+            if is_demo_owner(username):
+                return {**DEFAULT_PRIVILEGES, **DEMO_PRIVILEGES}
+        except Exception:
+            pass
         user = self.users.get(username, {})
         if user.get("is_admin"):
             return dict(ADMIN_PRIVILEGES)

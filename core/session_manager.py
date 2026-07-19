@@ -233,6 +233,16 @@ class SessionManager:
                 logger.warning("Dropping message for deleted session %s", session_id)
                 return
 
+            # Demo history is ephemeral: keep it in the in-memory SessionManager
+            # cache only and never write a stranger's chat to the deployer's
+            # disk. Lazy import avoids a src.demo -> core cycle.
+            try:
+                from src.demo import is_demo_owner
+                if is_demo_owner(getattr(db_session, "owner", None)):
+                    return
+            except Exception:
+                pass
+
             missing_upload_id = reserve_message_upload_references(
                 getattr(self, "upload_handler", None),
                 getattr(db_session, "owner", None),
@@ -445,6 +455,16 @@ class SessionManager:
             session.owner = getattr(db_session, "owner", None)
             session.is_important = getattr(db_session, "is_important", False) or False
             session.message_count = getattr(db_session, "message_count", session.message_count) or 0
+            # For demo owners, force the pinned model + endpoint + env OPENAI key
+            # authoritatively on every read. This overrides whatever the client
+            # sent to /api/session and is never persisted (the key stays
+            # env-only). Lazy import avoids a src.demo -> core cycle.
+            try:
+                from src.demo import is_demo_owner, apply_demo_session_config
+                if is_demo_owner(session.owner):
+                    apply_demo_session_config(session)
+            except Exception:
+                pass
             return True
         except Exception as e:
             logger.error(f"Error syncing session metadata {session_id}: {e}")

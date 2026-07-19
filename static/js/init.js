@@ -73,6 +73,19 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
         if (_agent) _agent.style.display = 'none';
         if (_chat) { _chat.classList.add('active'); _chat.click?.(); }
       }
+      // Demo mode: only the chat surface is reachable server-side (every other
+      // feature 401s by design). Hide the sidebar rails for those features so
+      // the public demo shows a clean chat-only UI instead of buttons that
+      // silently fail. Chat, new-chat, and theme stay.
+      if (data && data.demo) {
+        const _demoHide = [
+          '#rail-archive', '#rail-calendar', '#rail-compare', '#rail-cookbook',
+          '#rail-documents', '#rail-email', '#rail-gallery', '#rail-memory',
+          '#rail-notes', '#rail-research', '#rail-settings', '#rail-tasks',
+          '#rail-search-btn', '#rail-delete-session',
+        ];
+        _demoHide.forEach(sel => document.querySelectorAll(sel).forEach(el => { el.style.display = 'none'; }));
+      }
     } catch (_) { /* DOM not ready or unexpected shape — UI gates are non-fatal */ }
   } catch (_) { /* anonymous / loopback mode — nothing to do */ }
 })();
