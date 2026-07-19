@@ -602,7 +602,7 @@ _NON_CHAT_CONTAINS = (
     "bge", "llama-guard",
 )
 _NON_CHAT_EXACT_PREFIXES = (
-    "gpt-audio",  # gpt-audio, gpt-audio-mini etc. (not gpt-5.6-sol-audio-preview which is chat)
+    "gpt-audio",  # gpt-audio, gpt-audio-mini etc. (not gpt-4o-audio-preview which is chat)
     "gpt-3.5-turbo-instruct",  # legacy OpenAI completions model
 )
 

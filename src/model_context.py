@@ -384,7 +384,7 @@ def _proxy_catalog_context(endpoint_url: str, model: str) -> Optional[int]:
 
     if model in cat:
         return cat[model]
-    # Catalog ids may carry a provider prefix (e.g. "openai/gpt-5.6-sol") while the
+    # Catalog ids may carry a provider prefix (e.g. "openai/gpt-4o") while the
     # session stores the bare id; match on the trailing segment as a fallback.
     base = model.split("/")[-1]
     for mid, ctx in cat.items():

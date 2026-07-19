@@ -48,6 +48,7 @@ from src.demo import (
     demo_client_ip,
     demo_limit_sse,
     clamp_demo_output_tokens,
+    apply_demo_session_config,
 )
 from src.tool_policy import (
     WEB_TOOL_NAMES,
@@ -708,7 +709,6 @@ def setup_chat_routes(
                 # model/endpoint/env-key are authoritative here. Apply them up
                 # front and SKIP the endpoint-row orphan/recovery checks, which
                 # would otherwise clear the (row-less) endpoint and 400.
-                from src.demo import apply_demo_session_config
                 apply_demo_session_config(sess)
             else:
                 if _clear_orphaned_session_endpoint(sess, owner=owner):

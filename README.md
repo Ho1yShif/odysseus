@@ -91,6 +91,8 @@ Set automatically — no action needed: `ODYSSEUS_ADMIN_PASSWORD` (generated), `
 
 Raise or lower these in the deploy form / `render.yaml`. Set a limit to `0` to disable that one dimension; an unset variable falls back to the default (it **never** means "unlimited"). When a visitor hits a cap they get a friendly "deploy your own to keep going" reply — never an error.
 
+> **Your real spend ceiling is the OpenAI limit, not these counters.** The rate limit and per-session cap are keyed on the visitor's cookie and IP, so a determined visitor can reset them by clearing cookies (new session budget) or rotating IPs. Treat them as friction that keeps casual use affordable, not as a hard guarantee. The one true per-call ceiling is `DEMO_MAX_OUTPUT_TOKENS`. For a hard dollar cap, set a [monthly usage limit on your OpenAI project](https://platform.openai.com/settings/organization/limits) — that's what protects the bill if the demo URL is discovered or abused.
+
 **Session isolation & privacy.** Visitors can't see each other's chats (each is scoped to its own synthetic owner), and demo history is **ephemeral** — it lives in memory only and is never written to the deployer's disk. If you host a public demo URL, add a visible "public demo, may reset — don't submit anything sensitive" notice.
 
 ### Scaling for heavy workloads

@@ -42,10 +42,10 @@ def _int_env(name: str, default: int) -> int:
     (a missing var must NEVER mean "unlimited"); only an explicit 0 disables a
     dimension. Negative values are treated as invalid → default."""
     raw = os.getenv(name)
-    if raw is None or not str(raw).strip():
+    if raw is None or not raw.strip():
         return default
     try:
-        val = int(str(raw).strip())
+        val = int(raw.strip())
     except ValueError:
         return default
     return val if val >= 0 else default

@@ -77,6 +77,10 @@ projects:
               # DEMO=false keeps the full authenticated app (forks get this).
               # DEMO=true opens a public, no-signup, locked-down chat demo that
               # spends this deploy's OPENAI_API_KEY. See README "Demo mode".
+              # NOTE: the rate/session caps below are keyed on visitor cookie+IP
+              # and can be reset by clearing cookies / rotating IPs — they are
+              # friction, not a hard guarantee. Set a monthly usage limit on your
+              # OpenAI project for the true dollar ceiling before enabling this.
               - key: DEMO
                 value: "false"        # opt-in; not a secret. "true"/"1"/"yes" turns it on.
               - key: DEMO_MODEL

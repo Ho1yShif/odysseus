@@ -1044,8 +1044,8 @@ async def _startup_event():
     try:
         from src.demo import log_startup_mode
         log_startup_mode(logger)
-    except Exception as _e:
-        logger.warning("Failed to log demo startup mode: %s", _e)
+    except Exception as e:
+        logger.warning("Failed to log demo startup mode: %s", e)
     webhook_manager.set_loop(asyncio.get_running_loop())
     # Wipe any leftover incognito sessions from previous process — they're
     # ephemeral by design and must not survive a restart.

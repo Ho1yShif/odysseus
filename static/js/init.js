@@ -74,17 +74,17 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
         if (_chat) { _chat.classList.add('active'); _chat.click?.(); }
       }
       // Demo mode: only the chat surface is reachable server-side (every other
-      // feature 401s by design). Hide the sidebar rails for those features so
-      // the public demo shows a clean chat-only UI instead of buttons that
-      // silently fail. Chat, new-chat, and theme stay.
+      // feature 401s by design). Hide every icon-rail control EXCEPT the
+      // chat-only keep-set so the public demo shows a clean chat UI instead of
+      // buttons that silently fail. Allowlist (not denylist) so a feature rail
+      // added later is hidden by default rather than dangling a 401ing button.
       if (data && data.demo) {
-        const _demoHide = [
-          '#rail-archive', '#rail-calendar', '#rail-compare', '#rail-cookbook',
-          '#rail-documents', '#rail-email', '#rail-gallery', '#rail-memory',
-          '#rail-notes', '#rail-research', '#rail-settings', '#rail-tasks',
-          '#rail-search-btn', '#rail-delete-session',
-        ];
-        _demoHide.forEach(sel => document.querySelectorAll(sel).forEach(el => { el.style.display = 'none'; }));
+        const _demoKeep = new Set([
+          'rail-chats', 'rail-new-session', 'rail-theme', 'rail-resize-handle',
+        ]);
+        document.querySelectorAll('#icon-rail [id^="rail-"]').forEach(el => {
+          if (!_demoKeep.has(el.id)) el.style.display = 'none';
+        });
       }
     } catch (_) { /* DOM not ready or unexpected shape — UI gates are non-fatal */ }
   } catch (_) { /* anonymous / loopback mode — nothing to do */ }
