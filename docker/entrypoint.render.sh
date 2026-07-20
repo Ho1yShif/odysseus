@@ -5,7 +5,7 @@
 # /app/data is managed and already writable), so the PUID/PGID ownership-repair
 # dance in docker/entrypoint.sh is unnecessary here — we run as root and bind
 # the port Render injects via $PORT.
-set -e
+set -eu
 
 # First-time setup is idempotent (creates auth.json/.env only if missing).
 # || true so a non-critical hiccup never blocks startup — matches entrypoint.sh.

@@ -469,8 +469,12 @@ class SessionManager:
                 from src.demo import is_demo_owner, apply_demo_session_config
                 if is_demo_owner(session.owner):
                     apply_demo_session_config(session)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "Demo session-config pin failed for %s; leaving client values: %s",
+                    session_id,
+                    e,
+                )
             return True
         except Exception as e:
             logger.error(f"Error syncing session metadata {session_id}: {e}")

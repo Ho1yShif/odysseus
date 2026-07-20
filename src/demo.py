@@ -29,7 +29,7 @@ import re
 import threading
 import time
 import uuid
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def _flag(name: str, default: str = "false") -> bool:
@@ -87,7 +87,7 @@ LIMIT_MESSAGE = (
 # existing per-user enforcement in routes/chat_routes.py (which disables the
 # matching tools) and _enforce_chat_privileges (allowed_models). Everything
 # that writes, executes, spends extra, or reaches outward is OFF.
-DEMO_PRIVILEGES: Dict[str, object] = {
+DEMO_PRIVILEGES: Dict[str, Any] = {
     "can_use_agent": False,        # forces plain chat mode (no tool loop)
     "can_use_browser": False,      # no builtin browser
     "can_use_bash": False,         # no shell / python / file tools

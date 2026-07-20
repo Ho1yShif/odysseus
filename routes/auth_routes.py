@@ -198,8 +198,8 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
                     result["demo"] = True
                     result["privileges"] = auth_manager.get_privileges(owner)
                     return result
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Demo status resolution failed; falling back: %s", e)
         # Include the caller's effective privileges so the frontend can
         # hide / dim UI controls the user isn't allowed to use. Admins get
         # ADMIN_PRIVILEGES (everything on), regular users get their stored

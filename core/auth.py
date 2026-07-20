@@ -18,6 +18,10 @@ import pyotp
 
 logger = logging.getLogger(__name__)
 
+# One-shot guard so a broken ``src.demo`` import doesn't spam the log: get_privileges
+# is hot (status, list_users) and runs for every user, demo or not.
+_logged_demo_import_fail = False
+
 
 from core.atomic_io import atomic_write_json as _atomic_write_json  # noqa: E402
 from core.middleware import INTERNAL_TOOL_USER  # noqa: E402
@@ -407,7 +411,10 @@ class AuthManager:
         try:
             from src.demo import is_demo_owner, DEMO_PRIVILEGES
         except Exception as e:
-            logger.warning("Demo privilege import failed; applying locked-down fallback: %s", e)
+            global _logged_demo_import_fail
+            if not _logged_demo_import_fail:
+                _logged_demo_import_fail = True
+                logger.warning("Demo privilege import failed; applying locked-down fallback: %s", e)
             if bool(username) and str(username).startswith("demo-"):
                 return {**DEFAULT_PRIVILEGES, **DEMO_FALLBACK_PRIVILEGES}
         else:
