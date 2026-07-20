@@ -48,20 +48,12 @@ ADMIN_PRIVILEGES = {k: (True if isinstance(v, bool) else (0 if isinstance(v, int
 # survives that import failure. Mirrors DEMO_PRIVILEGES's intent — every
 # capability off — but errs harder (blocks all models): this path should never
 # be reached, and if it is we deny everything rather than fall through to the
-# more-permissive DEFAULT_PRIVILEGES.
-DEMO_FALLBACK_PRIVILEGES = {
-    "can_use_agent": False,
-    "can_use_browser": False,
-    "can_use_bash": False,
-    "can_use_documents": False,
-    "can_use_research": False,
-    "can_generate_images": False,
-    "can_manage_memory": False,
-    "max_messages_per_day": 0,
-    "allowed_models": [],
-    "allowed_models_restricted": True,
-    "block_all_models": True,
-}
+# more-permissive DEFAULT_PRIVILEGES. Derived from DEFAULT_PRIVILEGES (every
+# bool→False, int→0, list→[]) so a newly added privilege key defaults to off
+# here automatically instead of silently inheriting the permissive default.
+DEMO_FALLBACK_PRIVILEGES = {k: (False if isinstance(v, bool) else (0 if isinstance(v, int) else [])) for k, v in DEFAULT_PRIVILEGES.items()}
+DEMO_FALLBACK_PRIVILEGES["allowed_models_restricted"] = True
+DEMO_FALLBACK_PRIVILEGES["block_all_models"] = True
 ADMIN_PRIVILEGES["allowed_models_restricted"] = False
 # Admins must never be blocked from using models — the generic dict
 # comprehension above flips every boolean default to True, which would be

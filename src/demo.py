@@ -122,6 +122,16 @@ def is_demo_owner(username: Optional[str]) -> bool:
     return bool(username) and str(username).startswith(DEMO_OWNER_PREFIX)
 
 
+def is_demo_request(request, owner: Optional[str]) -> bool:
+    """True when this request should be served as a demo request: DEMO_MODE is on
+    AND either the middleware flagged it (``request.state.is_demo``) or ``owner``
+    is a demo owner. The single predicate the routes share so the demo gate can't
+    drift between call sites."""
+    return DEMO_MODE and (
+        getattr(request.state, "is_demo", False) or is_demo_owner(owner)
+    )
+
+
 def is_demo_allowed(method: str, path: str) -> bool:
     """True if (method, path) is on the demo route whitelist."""
     if (method, path) in _DEMO_ALLOWED_EXACT:
@@ -194,26 +204,16 @@ _ip_lock = threading.Lock()
 _ip_last_purge = time.monotonic()
 
 
-def _maybe_purge(now: float) -> None:
-    """Drop stale per-visitor counters so the dict can't grow without bound."""
-    global _last_purge
-    if now - _last_purge < _PURGE_AFTER:
-        return
-    _last_purge = now
-    stale = [k for k, v in _session_counts.items() if now - v[1] > _PURGE_AFTER]
+def _purge_stale(store: Dict[str, List[float]], last_purge: float, now: float) -> float:
+    """Drop counters idle longer than _PURGE_AFTER so ``store`` can't grow without
+    bound. Returns the new last-purge timestamp (unchanged until it's time to
+    purge again). Call under the store's lock."""
+    if now - last_purge < _PURGE_AFTER:
+        return last_purge
+    stale = [k for k, v in store.items() if now - v[1] > _PURGE_AFTER]
     for k in stale:
-        del _session_counts[k]
-
-
-def _maybe_purge_ips(now: float) -> None:
-    """Drop stale per-IP counters (same bounded-growth guard as _maybe_purge)."""
-    global _ip_last_purge
-    if now - _ip_last_purge < _PURGE_AFTER:
-        return
-    _ip_last_purge = now
-    stale = [k for k, v in _ip_counts.items() if now - v[1] > _PURGE_AFTER]
-    for k in stale:
-        del _ip_counts[k]
+        del store[k]
+    return now
 
 
 def check_demo_limits(owner: str, client_ip: str) -> Optional[str]:
@@ -233,13 +233,14 @@ def check_demo_limits(owner: str, client_ip: str) -> Optional[str]:
     Sharing a bucket across visitors behind one NAT errs toward more limiting —
     correct for a cost guard.
     """
+    global _last_purge, _ip_last_purge
     if _rate_limiter is not None:
         if not _rate_limiter.check(client_ip):
             return LIMIT_MESSAGE
+    now = time.monotonic()
     if DEMO_MAX_MESSAGES_PER_IP_PER_DAY > 0 and client_ip:
-        now = time.monotonic()
         with _ip_lock:
-            _maybe_purge_ips(now)
+            _ip_last_purge = _purge_stale(_ip_counts, _ip_last_purge, now)
             entry = _ip_counts.get(client_ip)
             if entry and now - entry[1] < _PURGE_AFTER:
                 used, start = int(entry[0]), entry[1]
@@ -249,9 +250,8 @@ def check_demo_limits(owner: str, client_ip: str) -> Optional[str]:
                 return LIMIT_MESSAGE
             _ip_counts[client_ip] = [used + 1, start]
     if DEMO_MAX_MESSAGES_PER_SESSION > 0:
-        now = time.monotonic()
         with _counts_lock:
-            _maybe_purge(now)
+            _last_purge = _purge_stale(_session_counts, _last_purge, now)
             entry = _session_counts.get(owner)
             used = entry[0] if entry else 0
             if used >= DEMO_MAX_MESSAGES_PER_SESSION:

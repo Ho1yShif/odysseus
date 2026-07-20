@@ -345,11 +345,8 @@ def setup_session_routes(
         # the client URL is inert (never dialed) and the guard would otherwise
         # 403 a non-admin demo owner out of ever creating the session — the bug
         # behind the "No chat session active" composer message.
-        from src.demo import DEMO_MODE, is_demo_owner, OPENAI_CHAT_URL, DEMO_MODEL
-        _is_demo_req = DEMO_MODE and (
-            getattr(request.state, "is_demo", False) or is_demo_owner(user)
-        )
-        if _is_demo_req:
+        from src.demo import is_demo_request, OPENAI_CHAT_URL, DEMO_MODEL
+        if is_demo_request(request, user):
             endpoint_id = ""
             endpoint_url = OPENAI_CHAT_URL
             model = DEMO_MODEL

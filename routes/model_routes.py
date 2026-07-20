@@ -2238,8 +2238,8 @@ def setup_model_routes(model_discovery):
         # apply_demo_session_config overrides every demo session to
         # OPENAI_CHAT_URL + DEMO_MODEL + the env key on read anyway, so hand the
         # composer that same pinned pair so it can create the session at all.
-        from src.demo import DEMO_MODE, is_demo_owner, OPENAI_CHAT_URL, DEMO_MODEL
-        if DEMO_MODE and (getattr(request.state, "is_demo", False) or is_demo_owner(_user)):
+        from src.demo import is_demo_request, OPENAI_CHAT_URL, DEMO_MODEL
+        if is_demo_request(request, _user):
             return {"endpoint_id": "", "endpoint_url": OPENAI_CHAT_URL, "model": DEMO_MODEL}
         # Admins resolve via the global defaults (they own them, and the
         # scoped resolution was making the picker disappear for them).
