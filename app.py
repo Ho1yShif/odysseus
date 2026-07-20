@@ -126,7 +126,12 @@ app = FastAPI(
 
 # ========= CORS =========
 CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
+# Honor ALLOWED_ORIGINS when set. Otherwise, on Render, default to this
+# service's own public origin (RENDER_EXTERNAL_URL is injected automatically) so
+# a fresh hosted deploy is locked to same-origin with zero configuration; fall
+# back to localhost for local dev. Never a wildcard — allow_credentials is on.
+_default_origins = os.getenv("RENDER_EXTERNAL_URL") or "http://localhost,http://127.0.0.1"
+allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", _default_origins).split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -252,6 +257,17 @@ AUTH_ENABLED = os.getenv("AUTH_ENABLED", "true").lower() != "false"
 LOCALHOST_BYPASS = os.getenv("LOCALHOST_BYPASS", "false").lower() == "true"
 if LOCALHOST_BYPASS:
     logger.warning("LOCALHOST_BYPASS is enabled, loopback requests bypass authentication. Do not expose this instance to a network.")
+
+# DEMO mode: opt-in, default off. When on, AuthMiddleware mints a per-visitor
+# locked-down demo session for unauthenticated visitors on the demo route
+# whitelist only; everything else still 302→/login or 401. Forks leave DEMO
+# unset and get the full authenticated app. See src/demo.py.
+from src.demo import (
+    DEMO_MODE,
+    is_demo_allowed as _demo_route_allowed,
+    resolve_demo_owner as _resolve_demo_owner,
+    set_demo_cookie as _set_demo_cookie,
+)
 
 if AUTH_ENABLED:
     AUTH_EXEMPT_EXACT = {
@@ -458,15 +474,30 @@ if AUTH_ENABLED:
 
             # --- Cookie-based session auth ---
             token = request.cookies.get(SESSION_COOKIE)
-            if not auth_manager.validate_token(token):
-                if path.startswith("/api/"):
-                    return JSONResponse(status_code=401, content={"error": "Not authenticated"})
-                return RedirectResponse(url="/login", status_code=302)
+            if auth_manager.validate_token(token):
+                # Attach current username to request state for downstream routes
+                request.state.current_user = auth_manager.get_username_for_token(token)
+                request.state.api_token = False
+                return await call_next(request)
 
-            # Attach current username to request state for downstream routes
-            request.state.current_user = auth_manager.get_username_for_token(token)
-            request.state.api_token = False
-            return await call_next(request)
+            # --- Demo path (opt-in, default off) ---
+            # Reached only for unauthenticated visitors AFTER the is_configured
+            # check, so first-run setup/login is unaffected. Mints a per-visitor
+            # locked-down synthetic owner, but ONLY on the demo route whitelist;
+            # everything else still 302→/login or 401 below.
+            if DEMO_MODE and _demo_route_allowed(request.method, path):
+                owner, new_cookie = _resolve_demo_owner(request)
+                request.state.current_user = owner
+                request.state.api_token = False
+                request.state.is_demo = True
+                response = await call_next(request)
+                if new_cookie:
+                    _set_demo_cookie(response, new_cookie)
+                return response
+
+            if path.startswith("/api/"):
+                return JSONResponse(status_code=401, content={"error": "Not authenticated"})
+            return RedirectResponse(url="/login", status_code=302)
 
     app.add_middleware(AuthMiddleware)
     logger.info("Auth middleware enabled (AUTH_ENABLED=true)")
@@ -1008,6 +1039,13 @@ app.router.lifespan_context = _lifespan
 async def _startup_event():
     global upload_cleanup_task
     logger.info("Application starting up...")
+    # Announce which mode booted (normal vs. DEMO) so a misconfigured deploy is
+    # obvious in the logs. Inert unless DEMO=true.
+    try:
+        from src.demo import log_startup_mode
+        log_startup_mode(logger)
+    except Exception as e:
+        logger.warning("Failed to log demo startup mode: %s", e)
     webhook_manager.set_loop(asyncio.get_running_loop())
     # Wipe any leftover incognito sessions from previous process — they're
     # ephemeral by design and must not survive a restart.
@@ -1016,12 +1054,18 @@ async def _startup_event():
         _db = _SL()
         try:
             _ghosts = _db.query(_DbSess).filter(_DbSess.name.in_(("Nobody", "Incognito"))).all()
+            # Demo sessions are ephemeral too: their chat history is never
+            # persisted, but the lightweight metadata rows accumulate one per
+            # visitor page-load. Wipe them on boot so a long-running public demo
+            # can't grow the sessions table without bound (bounded by the 1-day
+            # demo cookie + each restart). Owner-scoped, so no real user data.
+            _ghosts += _db.query(_DbSess).filter(_DbSess.owner.like("demo-%")).all()
             for _g in _ghosts:
                 _db.query(_DbMsg).filter(_DbMsg.session_id == _g.id).delete()
                 _db.delete(_g)
             if _ghosts:
                 _db.commit()
-                logger.info(f"Purged {len(_ghosts)} leftover incognito session(s)")
+                logger.info(f"Purged {len(_ghosts)} leftover ephemeral session(s)")
         finally:
             _db.close()
     except Exception as e:
