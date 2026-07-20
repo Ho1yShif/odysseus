@@ -122,6 +122,95 @@ def test_rate_limit_trips_independently(monkeypatch):
         importlib.reload(d)
 
 
+# --- rate limit keyed on IP, not owner (cookieless-flood bypass) ------------
+def test_rate_limit_keyed_on_ip_survives_owner_churn(monkeypatch):
+    # The bypass: a client that ignores Set-Cookie gets a fresh demo-<uuid>
+    # owner on every request. Keying the limiter on owner|ip meant the sliding
+    # window never filled. Keyed on IP alone, owner churn can't reset it.
+    monkeypatch.setenv("DEMO", "true")
+    monkeypatch.setenv("DEMO_RATE_LIMIT_PER_MINUTE", "3")
+    monkeypatch.setenv("DEMO_MAX_MESSAGES_PER_SESSION", "0")      # isolate the rate axis
+    monkeypatch.setenv("DEMO_MAX_MESSAGES_PER_IP_PER_DAY", "0")   # isolate the rate axis
+    import src.demo as d
+    d = importlib.reload(d)
+    try:
+        ip = "203.0.113.7"
+        # Each call is a brand-new cookieless owner — the exact bypass vector.
+        results = [d.check_demo_limits("demo-" + f"{i:032x}", ip) for i in range(3)]
+        assert results == [None, None, None]
+        assert d.check_demo_limits("demo-" + "f" * 32, ip) == d.LIMIT_MESSAGE
+    finally:
+        importlib.reload(d)
+
+
+# --- trusted client IP resolution (spoof resistance, Task 1a) ---------------
+def test_demo_client_ip_reads_trusted_right_side_not_spoofable_left(demo):
+    # Render appends the real peer IP to the RIGHT of X-Forwarded-For; the
+    # leftmost entry is attacker-controlled. With one trusted hop (the default)
+    # we must read the rightmost entry, so a rotating leftmost can't move the key.
+    real = "198.51.100.9"
+    req1 = SimpleNamespace(
+        headers={"x-forwarded-for": f"1.1.1.1, {real}"},
+        client=SimpleNamespace(host="10.0.0.1"),
+    )
+    req2 = SimpleNamespace(
+        headers={"x-forwarded-for": f"2.2.2.2, 3.3.3.3, {real}"},
+        client=SimpleNamespace(host="10.0.0.1"),
+    )
+    assert demo.demo_client_ip(req1) == real
+    assert demo.demo_client_ip(req2) == real
+
+
+def test_demo_client_ip_falls_back_to_peer_when_no_xff(demo):
+    req = SimpleNamespace(headers={}, client=SimpleNamespace(host="192.0.2.5"))
+    assert demo.demo_client_ip(req) == "192.0.2.5"
+
+
+def test_spoofed_leftmost_xff_does_not_reset_rate_limit(monkeypatch):
+    monkeypatch.setenv("DEMO", "true")
+    monkeypatch.setenv("DEMO_RATE_LIMIT_PER_MINUTE", "3")
+    monkeypatch.setenv("DEMO_MAX_MESSAGES_PER_SESSION", "0")
+    monkeypatch.setenv("DEMO_MAX_MESSAGES_PER_IP_PER_DAY", "0")
+    import src.demo as d
+    d = importlib.reload(d)
+    try:
+        real = "198.51.100.9"
+
+        def send(spoof, owner):
+            req = SimpleNamespace(
+                headers={"x-forwarded-for": f"{spoof}, {real}"},
+                client=SimpleNamespace(host="10.0.0.1"),
+            )
+            return d.check_demo_limits(owner, d.demo_client_ip(req))
+
+        # Rotate both the spoofed leftmost XFF and the cookieless owner.
+        outs = [send(f"{i}.{i}.{i}.{i}", "demo-" + f"{i:032x}") for i in range(1, 4)]
+        assert outs == [None, None, None]
+        assert send("9.9.9.9", "demo-" + "a" * 32) == d.LIMIT_MESSAGE
+    finally:
+        importlib.reload(d)
+
+
+# --- per-IP daily ceiling (the real backstop, Task 2) -----------------------
+def test_per_ip_daily_ceiling_trips_regardless_of_owner(monkeypatch):
+    monkeypatch.setenv("DEMO", "true")
+    monkeypatch.setenv("DEMO_RATE_LIMIT_PER_MINUTE", "0")        # isolate the per-IP axis
+    monkeypatch.setenv("DEMO_MAX_MESSAGES_PER_SESSION", "0")
+    monkeypatch.setenv("DEMO_MAX_MESSAGES_PER_IP_PER_DAY", "3")
+    import src.demo as d
+    d = importlib.reload(d)
+    try:
+        ip = "203.0.113.50"
+        outs = [d.check_demo_limits("demo-" + f"{i:032x}", ip) for i in range(3)]
+        assert outs == [None, None, None]
+        # 4th request from a fresh owner still trips — the IP is the trusted key.
+        assert d.check_demo_limits("demo-" + "b" * 32, ip) == d.LIMIT_MESSAGE
+        # A different IP is unaffected.
+        assert d.check_demo_limits("demo-" + "c" * 32, "203.0.113.99") is None
+    finally:
+        importlib.reload(d)
+
+
 # --- pinned session config (env key, never persisted) -----------------------
 def test_apply_demo_session_config_pins_model_and_env_key(demo, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-live-xyz")
@@ -156,6 +245,29 @@ def test_get_privileges_returns_locked_profile_for_demo_owner(demo):
         assert privs[off] is False, off
     assert privs["allowed_models"] == [demo.DEMO_MODEL]
     assert privs["allowed_models_restricted"] is True
+
+
+def test_get_privileges_fails_closed_when_demo_import_raises(monkeypatch):
+    # Defense-in-depth (Task 3): if src.demo can't be imported at the choke
+    # point, a demo owner must NOT fall through to the more-permissive
+    # DEFAULT_PRIVILEGES. The demo- prefix is detected inline and the locked-down
+    # fallback profile is returned instead. No `demo` fixture here: patching
+    # sys.modules["src.demo"] would break that fixture's reload-based teardown.
+    import sys
+    from core.auth import AuthManager
+
+    class _Boom:
+        def __getattr__(self, name):
+            raise ImportError("simulated src.demo import failure")
+
+    monkeypatch.setitem(sys.modules, "src.demo", _Boom())
+    am = AuthManager.__new__(AuthManager)
+    privs = am.get_privileges("demo-" + "d" * 32)
+    for off in (
+        "can_use_agent", "can_use_browser", "can_use_bash", "can_use_documents",
+        "can_use_research", "can_generate_images", "can_manage_memory",
+    ):
+        assert privs[off] is False, off
 
 
 # --- ephemeral history (SessionManager._persist_message skip) ---------------

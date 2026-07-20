@@ -42,6 +42,26 @@ DEFAULT_PRIVILEGES = {
 
 # Admins get everything
 ADMIN_PRIVILEGES = {k: (True if isinstance(v, bool) else (0 if isinstance(v, int) else [])) for k, v in DEFAULT_PRIVILEGES.items()}
+
+# Fail-closed profile for a demo owner when src.demo (and thus DEMO_PRIVILEGES)
+# can't be imported at the get_privileges choke point. Defined here so it
+# survives that import failure. Mirrors DEMO_PRIVILEGES's intent — every
+# capability off — but errs harder (blocks all models): this path should never
+# be reached, and if it is we deny everything rather than fall through to the
+# more-permissive DEFAULT_PRIVILEGES.
+DEMO_FALLBACK_PRIVILEGES = {
+    "can_use_agent": False,
+    "can_use_browser": False,
+    "can_use_bash": False,
+    "can_use_documents": False,
+    "can_use_research": False,
+    "can_generate_images": False,
+    "can_manage_memory": False,
+    "max_messages_per_day": 0,
+    "allowed_models": [],
+    "allowed_models_restricted": True,
+    "block_all_models": True,
+}
 ADMIN_PRIVILEGES["allowed_models_restricted"] = False
 # Admins must never be blocked from using models — the generic dict
 # comprehension above flips every boolean default to True, which would be
@@ -387,14 +407,17 @@ class AuthManager:
         # Demo owners (demo-<uuid>) get the least-privilege profile regardless of
         # any stored config — they have no user row anyway. This is the single
         # choke point that drives per-tool enforcement in chat_routes. Lazy
-        # import keeps src.demo from importing core.auth (cycle). Scope the guard
-        # to the import only: a swallowed error here would fail OPEN (a demo owner
-        # falling through to the more-permissive default profile), so surface it
-        # rather than hiding it.
+        # import keeps src.demo from importing core.auth (cycle). Fail CLOSED: if
+        # the import breaks, a demo owner must NOT fall through to the
+        # more-permissive DEFAULT_PRIVILEGES, so detect the demo- prefix inline
+        # (mirroring src.demo.is_demo_owner, as core/session_manager.py does) and
+        # return the locked-down fallback instead.
         try:
             from src.demo import is_demo_owner, DEMO_PRIVILEGES
         except Exception as e:
-            logger.warning("Demo privilege check unavailable, falling back to default profile: %s", e)
+            logger.warning("Demo privilege import failed; applying locked-down fallback: %s", e)
+            if bool(username) and str(username).startswith("demo-"):
+                return {**DEFAULT_PRIVILEGES, **DEMO_FALLBACK_PRIVILEGES}
         else:
             if is_demo_owner(username):
                 return {**DEFAULT_PRIVILEGES, **DEMO_PRIVILEGES}

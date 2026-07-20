@@ -86,12 +86,17 @@ Set automatically — no action needed: `ODYSSEUS_ADMIN_PASSWORD` (generated), `
 |---|---|---|
 | `DEMO_MODEL` | `gpt-5.6-luna` | the pinned (cheap) chat model |
 | `DEMO_MAX_OUTPUT_TOKENS` | `512` | output tokens per reply |
-| `DEMO_RATE_LIMIT_PER_MINUTE` | `10` | chat sends per minute, per visitor+IP |
-| `DEMO_MAX_MESSAGES_PER_SESSION` | `30` | total messages per visitor session |
+| `DEMO_RATE_LIMIT_PER_MINUTE` | `10` | chat sends per minute, per client IP |
+| `DEMO_MAX_MESSAGES_PER_SESSION` | `30` | total messages per visitor cookie session (UX friction) |
+| `DEMO_MAX_MESSAGES_PER_IP_PER_DAY` | `200` | hard per-IP daily message ceiling (the real backstop) |
 
 Raise or lower these in the deploy form / `render.yaml`. Set a limit to `0` to disable that one dimension; an unset variable falls back to the default (it **never** means "unlimited"). When a visitor hits a cap they get a friendly "deploy your own to keep going" reply — never an error.
 
-> **Your real spend ceiling is the OpenAI limit, not these counters.** The rate limit and per-session cap are keyed on the visitor's cookie and IP, so a determined visitor can reset them by clearing cookies (new session budget) or rotating IPs. Treat them as friction that keeps casual use affordable, not as a hard guarantee. The one true per-call ceiling is `DEMO_MAX_OUTPUT_TOKENS`. For a hard dollar cap, set a [monthly usage limit on your OpenAI project](https://platform.openai.com/settings/organization/limits) — that's what protects the bill if the demo URL is discovered or abused.
+The rate limit and the per-IP daily ceiling are keyed on the **trusted client IP** — the entry Render's proxy attests on `X-Forwarded-For`, read from the right (`TRUSTED_PROXY_HOPS` hops in, default `1`), never the spoofable leftmost value. So clearing cookies or churning the demo session **can't** reset them. The per-session cap is cookie-based, so it's UX friction only; the per-IP ceiling is the volume backstop. Visitors behind one NAT/IP share a bucket — that errs toward more limiting, which is what you want for a cost guard.
+
+> `TRUSTED_PROXY_HOPS` is app-wide, not demo-only: the auth login/signup/setup rate limiters key on the same trusted IP. On first traffic the app logs a one-time `[trusted-ip] X-Forwarded-For sample` line — check it once on your deploy to confirm `1` hop resolves your real client IP (retune if you front the service with extra proxies).
+
+> **Your real spend ceiling is the OpenAI limit, not these counters.** The caps above bound the burn *rate*; they reduce how fast the key can be spent, they don't cap total dollars. The one true per-call ceiling is `DEMO_MAX_OUTPUT_TOKENS`. For a hard dollar cap, set a [monthly usage limit on your OpenAI project](https://platform.openai.com/settings/organization/limits) — that's what protects the bill if the demo URL is discovered or abused.
 
 **Session isolation & privacy.** Visitors can't see each other's chats (each is scoped to its own synthetic owner), and demo history is **ephemeral** — it lives in memory only and is never written to the deployer's disk. If you host a public demo URL, add a visible "public demo, may reset — don't submit anything sensitive" notice.
 

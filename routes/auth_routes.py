@@ -14,7 +14,7 @@ from pathlib import Path
 from core.atomic_io import atomic_write_json, atomic_write_text
 from core.auth import AuthManager, RESERVED_USERNAMES, SetAdminResult, TOKEN_TTL
 from src.constants import DEEP_RESEARCH_DIR, MEMORY_FILE, PASSWORD_MIN_LENGTH, SKILLS_DIR
-from src.rate_limiter import RateLimiter
+from src.rate_limiter import RateLimiter, trusted_client_ip
 from src.settings_scrub import scrub_settings
 from src.settings import (
     load_settings as _load_settings,
@@ -98,7 +98,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     @router.post("/setup")
     async def first_run_setup(body: SetupRequest, request: Request):
         """Create initial admin account. Only works if no accounts exist."""
-        if not _setup_limiter.check(request.client.host):
+        if not _setup_limiter.check(trusted_client_ip(request)):
             raise HTTPException(429, "Too many requests — try again later")
         if auth_manager.is_configured:
             raise HTTPException(400, "Already configured")
@@ -116,7 +116,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
     @router.post("/signup")
     async def signup(body: SignupRequest, request: Request):
         """Create a new user account. Only works if signup is enabled by admin."""
-        if not _signup_limiter.check(request.client.host):
+        if not _signup_limiter.check(trusted_client_ip(request)):
             raise HTTPException(429, "Too many requests — try again later")
         if not auth_manager.is_configured:
             raise HTTPException(400, "Run setup first")
@@ -135,7 +135,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
 
     @router.post("/login")
     async def login(body: LoginRequest, request: Request, response: Response):
-        if not _login_limiter.check(request.client.host):
+        if not _login_limiter.check(trusted_client_ip(request)):
             raise HTTPException(429, "Too many requests — try again later")
         # Verify password first
         username = body.username.strip().lower()

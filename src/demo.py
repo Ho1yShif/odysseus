@@ -66,6 +66,10 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 # --- Usage limits (only consulted when DEMO_MODE). 0 disables the dimension. -
 DEMO_RATE_LIMIT_PER_MINUTE = _int_env("DEMO_RATE_LIMIT_PER_MINUTE", 10)
 DEMO_MAX_MESSAGES_PER_SESSION = _int_env("DEMO_MAX_MESSAGES_PER_SESSION", 30)
+# IP-scoped total ceiling — the real volume backstop. The per-session cap is
+# cookie-based (ephemeral history) so it's UX friction; this one is keyed on the
+# trusted client IP (see demo_client_ip) and survives cookie/owner churn.
+DEMO_MAX_MESSAGES_PER_IP_PER_DAY = _int_env("DEMO_MAX_MESSAGES_PER_IP_PER_DAY", 200)
 DEMO_MAX_OUTPUT_TOKENS = _int_env("DEMO_MAX_OUTPUT_TOKENS", 512)
 if DEMO_MAX_OUTPUT_TOKENS <= 0:
     # A 0/unset output cap would mean "no cap" downstream — keep a sane floor so
@@ -175,11 +179,19 @@ if DEMO_MODE and DEMO_RATE_LIMIT_PER_MINUTE > 0:
     from src.rate_limiter import RateLimiter
     _rate_limiter = RateLimiter(max_requests=DEMO_RATE_LIMIT_PER_MINUTE, window_seconds=60)
 
+_PURGE_AFTER = 60 * 60 * 24  # forget a counter a day after its last activity
+
 # owner -> [message_count, last_touch_monotonic]
 _session_counts: Dict[str, List[float]] = {}
 _counts_lock = threading.Lock()
 _last_purge = time.monotonic()
-_PURGE_AFTER = 60 * 60 * 24  # forget a visitor's count a day after their last message
+
+# trusted_client_ip -> [message_count, window_start_monotonic]. Keyed on the IP
+# (not the cookie/owner) so it survives cookie clearing and owner churn — this is
+# the real backstop. The count resets once a full day elapses from window start.
+_ip_counts: Dict[str, List[float]] = {}
+_ip_lock = threading.Lock()
+_ip_last_purge = time.monotonic()
 
 
 def _maybe_purge(now: float) -> None:
@@ -193,17 +205,49 @@ def _maybe_purge(now: float) -> None:
         del _session_counts[k]
 
 
+def _maybe_purge_ips(now: float) -> None:
+    """Drop stale per-IP counters (same bounded-growth guard as _maybe_purge)."""
+    global _ip_last_purge
+    if now - _ip_last_purge < _PURGE_AFTER:
+        return
+    _ip_last_purge = now
+    stale = [k for k, v in _ip_counts.items() if now - v[1] > _PURGE_AFTER]
+    for k in stale:
+        del _ip_counts[k]
+
+
 def check_demo_limits(owner: str, client_ip: str) -> Optional[str]:
     """Return a friendly limit message if the visitor is over a cap, else None.
 
-    Call once per chat send, BEFORE spending the key. Enforces (a) a sliding
-    per-minute rate limit keyed by visitor+IP and (b) a total per-session
-    message cap. A tripped cap returns text, never an exception, so the caller
-    can render it as a normal assistant turn instead of a 500/hang.
+    Call once per chat send, BEFORE spending the key. Enforces, in order:
+      (a) a sliding per-minute rate limit keyed on the trusted client IP,
+      (b) an IP-scoped daily message ceiling (the real volume backstop), and
+      (c) a per-session (cookie-scoped) message cap — UX friction, not a guard.
+    A tripped cap returns text, never an exception, so the caller can render it
+    as a normal assistant turn instead of a 500/hang.
+
+    The rate limit and daily ceiling key on ``client_ip`` alone — the only
+    visitor-stable signal for an unauthenticated demo request. ``owner`` is
+    minted fresh for any client that ignores the demo cookie, so keying either
+    on it would let a cookieless client reset the window on every request.
+    Sharing a bucket across visitors behind one NAT errs toward more limiting —
+    correct for a cost guard.
     """
     if _rate_limiter is not None:
-        if not _rate_limiter.check(f"{owner}|{client_ip}"):
+        if not _rate_limiter.check(client_ip):
             return LIMIT_MESSAGE
+    if DEMO_MAX_MESSAGES_PER_IP_PER_DAY > 0 and client_ip:
+        now = time.monotonic()
+        with _ip_lock:
+            _maybe_purge_ips(now)
+            entry = _ip_counts.get(client_ip)
+            if entry and now - entry[1] < _PURGE_AFTER:
+                used, start = int(entry[0]), entry[1]
+            else:
+                used, start = 0, now  # first hit, or the day-long window expired
+            if used >= DEMO_MAX_MESSAGES_PER_IP_PER_DAY:
+                return LIMIT_MESSAGE
+            _ip_counts[client_ip] = [used + 1, start]
     if DEMO_MAX_MESSAGES_PER_SESSION > 0:
         now = time.monotonic()
         with _counts_lock:
@@ -217,11 +261,14 @@ def check_demo_limits(owner: str, client_ip: str) -> Optional[str]:
 
 
 def demo_client_ip(request) -> str:
-    """Best-effort client IP for rate limiting, honoring Render's proxy."""
-    xff = request.headers.get("x-forwarded-for", "")
-    if xff:
-        return xff.split(",")[0].strip()
-    return request.client.host if getattr(request, "client", None) else ""
+    """Trusted client IP for the demo rate/volume caps.
+
+    Delegates to the shared ``trusted_client_ip`` so the demo caps and the
+    auth-route limiters agree on which ``X-Forwarded-For`` entry to trust
+    (governed by ``TRUSTED_PROXY_HOPS``) — see src/rate_limiter.py.
+    """
+    from src.rate_limiter import trusted_client_ip
+    return trusted_client_ip(request)
 
 
 async def demo_limit_sse(message: str):
@@ -247,10 +294,12 @@ def log_startup_mode(logger) -> None:
     if DEMO_MODE:
         logger.warning(
             "[startup] DEMO mode ENABLED — public, no-signup, locked-down chat demo is live "
-            "and spends OPENAI_API_KEY. model=%s rate=%s/min msgs/session=%s max_output_tokens=%s",
+            "and spends OPENAI_API_KEY. model=%s rate=%s/min msgs/session=%s "
+            "msgs/ip/day=%s max_output_tokens=%s",
             DEMO_MODEL,
             DEMO_RATE_LIMIT_PER_MINUTE or "unlimited",
             DEMO_MAX_MESSAGES_PER_SESSION or "unlimited",
+            DEMO_MAX_MESSAGES_PER_IP_PER_DAY or "unlimited",
             DEMO_MAX_OUTPUT_TOKENS,
         )
     else:
