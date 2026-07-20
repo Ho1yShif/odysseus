@@ -21,8 +21,12 @@ def _trusted_proxy_hops() -> int:
 
     Read per-call from ``TRUSTED_PROXY_HOPS`` (default 1, matching Render's single
     edge proxy) so tests and redeploys can retune it without a module reload.
-    Unset/invalid/negative falls back to 1 — never 0, which would disable XFF
-    parsing and silently trust the spoofable peer/leftmost value.
+    This mirrors the conventional trusted-hop count (Werkzeug ``ProxyFix``,
+    uvicorn ``--forwarded-allow-ips``): ``n`` = ``n`` trusted proxies, and an
+    explicit ``0`` = "no trusted proxy — the deploy is directly exposed, so
+    ``X-Forwarded-For`` is entirely attacker-supplied and must be ignored in
+    favour of the real TCP peer". Unset/invalid/negative falls back to 1 (the
+    Render default). Only a deliberate ``0`` disables XFF parsing.
     """
     raw = os.getenv("TRUSTED_PROXY_HOPS", "").strip()
     if not raw:
@@ -31,7 +35,7 @@ def _trusted_proxy_hops() -> int:
         val = int(raw)
     except ValueError:
         return 1
-    return val if val >= 1 else 1
+    return val if val >= 0 else 1
 
 
 _logged_xff_sample = False
@@ -46,6 +50,12 @@ def trusted_client_ip(request) -> str:
     entries from the right. The leftmost entry is client-supplied and spoofable,
     so we must NOT read it. Falls back to the immediate peer (``request.client``)
     when the header is absent or shorter than the configured hop count.
+
+    When ``TRUSTED_PROXY_HOPS`` is ``0`` (directly-exposed deploy with no trusted
+    proxy), ``X-Forwarded-For`` is wholly attacker-supplied and is ignored: the
+    key is always the real TCP peer. Forks deploying this template off Render must
+    set ``0`` if the service is internet-facing with no proxy — leaving the
+    default ``1`` there makes the rate limiter spoofable.
 
     NOTE: this assumes uvicorn runs WITHOUT ``--proxy-headers`` (see
     docker/entrypoint.render.sh), so ``request.client.host`` is the Render proxy

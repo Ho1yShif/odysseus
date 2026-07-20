@@ -41,11 +41,24 @@ class TestTrustedClientIP:
         monkeypatch.setenv("TRUSTED_PROXY_HOPS", "3")
         assert trusted_client_ip(_req("1.1.1.1, 2.2.2.2", peer="192.0.2.7")) == "192.0.2.7"
 
-    def test_invalid_or_zero_hops_falls_back_to_one(self, monkeypatch):
-        for bad in ("0", "-1", "abc", ""):
+    def test_invalid_or_negative_hops_falls_back_to_one(self, monkeypatch):
+        for bad in ("-1", "abc", ""):
             monkeypatch.setenv("TRUSTED_PROXY_HOPS", bad)
             # hops floored to 1 -> still reads the rightmost, never the leftmost.
             assert trusted_client_ip(_req("1.1.1.1, 198.51.100.9")) == "198.51.100.9"
+
+    def test_zero_hops_trusts_peer_and_ignores_xff(self, monkeypatch):
+        # No trusted proxy (directly-exposed deploy): the whole XFF is
+        # attacker-supplied, so we MUST key on the real TCP peer and ignore it.
+        monkeypatch.setenv("TRUSTED_PROXY_HOPS", "0")
+        assert trusted_client_ip(_req("1.2.3.4", peer="192.0.2.5")) == "192.0.2.5"
+        assert (
+            trusted_client_ip(_req("9.9.9.9, 8.8.8.8", peer="192.0.2.5")) == "192.0.2.5"
+        )
+
+    def test_zero_hops_falls_back_to_peer_without_xff(self, monkeypatch):
+        monkeypatch.setenv("TRUSTED_PROXY_HOPS", "0")
+        assert trusted_client_ip(_req(xff=None, peer="192.0.2.9")) == "192.0.2.9"
 
     def test_logs_xff_sample_once(self, monkeypatch, caplog):
         monkeypatch.setenv("TRUSTED_PROXY_HOPS", "1")
