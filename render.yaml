@@ -21,7 +21,7 @@ projects:
             dockerfilePath: ./Dockerfile.render
             plan: standard            # 2 GB — in-process fastembed embeddings need headroom
             region: oregon
-            healthCheckPath: /
+            healthCheckPath: /api/health
             disk:
               name: odysseus-data     # SQLite DB, encrypted key store, uploads, embed cache
               mountPath: /app/data

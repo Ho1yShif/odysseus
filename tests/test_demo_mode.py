@@ -38,6 +38,18 @@ def test_is_demo_owner_matches_prefix_not_reserved_sentinel(demo):
     assert demo.is_demo_owner(None) is False
 
 
+def test_is_demo_owner_inert_when_demo_disabled(monkeypatch):
+    """A ``demo-`` username on a non-demo deploy must be an ordinary user, not
+    silently locked into the demo profile (is_demo_owner is gated on DEMO_MODE)."""
+    monkeypatch.setenv("DEMO", "false")
+    import src.demo as d
+    d = importlib.reload(d)
+    try:
+        assert d.is_demo_owner("demo-" + "a" * 32) is False
+    finally:
+        importlib.reload(d)
+
+
 # --- route whitelist --------------------------------------------------------
 def test_route_whitelist_allows_only_the_chat_surface(demo):
     assert demo.is_demo_allowed("GET", "/") is True

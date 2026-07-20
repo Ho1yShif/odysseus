@@ -117,9 +117,20 @@ _DEMO_ALLOWED_PREFIXES: Tuple[Tuple[str, str], ...] = (("GET", "/static"),)
 
 
 def is_demo_owner(username: Optional[str]) -> bool:
-    """True for a per-visitor demo owner id (demo-<uuid>). Prefix check — does
-    NOT match the literal reserved username "demo"."""
-    return bool(username) and str(username).startswith(DEMO_OWNER_PREFIX)
+    """True for a per-visitor demo owner id (demo-<uuid>) WHEN demo mode is on.
+
+    Gated on DEMO_MODE so a normal fork stays inert: a user who registers a
+    ``demo-`` username on a non-demo deploy is an ordinary user, NOT silently
+    locked into the demo least-privilege profile with their chat history dropped.
+    This is the single choke point every caller (get_privileges, session_manager,
+    task_scheduler, chat/auth routes) shares, so the gate can't drift between
+    them. Prefix check — does NOT match the literal reserved username "demo".
+
+    NOTE: the import-failure fallback in ``core.auth.get_privileges`` deliberately
+    re-checks the ``demo-`` prefix inline WITHOUT this gate — that path fails
+    closed (locks down) when ``src.demo`` is unimportable and DEMO_MODE is
+    unknowable, which is the safe direction for a broken deploy."""
+    return DEMO_MODE and bool(username) and str(username).startswith(DEMO_OWNER_PREFIX)
 
 
 def is_demo_request(request, owner: Optional[str]) -> bool:
