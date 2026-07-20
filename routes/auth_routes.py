@@ -174,7 +174,7 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         return {"ok": True}
 
     @router.get("/status")
-    async def auth_status(request: Request):
+    async def auth_status(request: Request, response: Response):
         token = request.cookies.get(SESSION_COOKIE)
         result = auth_manager.status(token)
         result["signup_enabled"] = auth_manager.signup_enabled
@@ -185,12 +185,22 @@ def setup_auth_routes(auth_manager: AuthManager) -> APIRouter:
         # profile so the SPA renders the chat UI (and hides disabled controls)
         # instead of gating on login. This route is auth-exempt and runs BEFORE
         # the middleware demo path, so resolve the demo owner from the cookie
-        # directly here.
+        # directly here. When the visitor has no demo cookie yet, resolve_demo_owner
+        # mints one; set it on the response so an owner is stable even if the SPA
+        # calls /status before GET / (the middleware demo path also sets it). Not
+        # doing so would mint a fresh owner on every such call.
         try:
-            from src.demo import DEMO_MODE, resolve_demo_owner, is_demo_owner
+            from src.demo import (
+                DEMO_MODE,
+                resolve_demo_owner,
+                is_demo_owner,
+                set_demo_cookie,
+            )
             if DEMO_MODE and not result.get("authenticated"):
-                owner, _new = resolve_demo_owner(request)
+                owner, new_cookie = resolve_demo_owner(request)
                 if is_demo_owner(owner):
+                    if new_cookie:
+                        set_demo_cookie(response, new_cookie)
                     result["configured"] = True
                     result["authenticated"] = True
                     result["username"] = owner

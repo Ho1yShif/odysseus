@@ -232,10 +232,17 @@ def check_demo_limits(owner: str, client_ip: str) -> Optional[str]:
 
     Call once per chat send, BEFORE spending the key. Enforces, in order:
       (a) a sliding per-minute rate limit keyed on the trusted client IP,
-      (b) an IP-scoped daily message ceiling (the real volume backstop), and
-      (c) a per-session (cookie-scoped) message cap — UX friction, not a guard.
+      (b) a per-session (cookie-scoped) message cap — UX friction, not a guard,
+      (c) an IP-scoped daily message ceiling (the real volume backstop).
     A tripped cap returns text, never an exception, so the caller can render it
     as a normal assistant turn instead of a 500/hang.
+
+    The per-session cap is checked (and consumed) BEFORE the IP counter is
+    touched, so a visitor already over their session cap returns without
+    spending a unit of the IP-scoped daily budget — the real cost backstop.
+    (The reverse over-count — an IP-capped visitor advancing the session
+    counter — is harmless: that counter is cookie-scoped UX friction, and the
+    visitor is blocked by the IP ceiling regardless.)
 
     The rate limit and daily ceiling key on ``client_ip`` alone — the only
     visitor-stable signal for an unauthenticated demo request. ``owner`` is
@@ -249,6 +256,14 @@ def check_demo_limits(owner: str, client_ip: str) -> Optional[str]:
         if not _rate_limiter.check(client_ip):
             return LIMIT_MESSAGE
     now = time.monotonic()
+    if DEMO_MAX_MESSAGES_PER_SESSION > 0:
+        with _counts_lock:
+            _last_purge = _purge_stale(_session_counts, _last_purge, now)
+            entry = _session_counts.get(owner)
+            used = entry[0] if entry else 0
+            if used >= DEMO_MAX_MESSAGES_PER_SESSION:
+                return LIMIT_MESSAGE
+            _session_counts[owner] = [used + 1, now]
     if DEMO_MAX_MESSAGES_PER_IP_PER_DAY > 0 and client_ip:
         with _ip_lock:
             _ip_last_purge = _purge_stale(_ip_counts, _ip_last_purge, now)
@@ -260,14 +275,6 @@ def check_demo_limits(owner: str, client_ip: str) -> Optional[str]:
             if used >= DEMO_MAX_MESSAGES_PER_IP_PER_DAY:
                 return LIMIT_MESSAGE
             _ip_counts[client_ip] = [used + 1, start]
-    if DEMO_MAX_MESSAGES_PER_SESSION > 0:
-        with _counts_lock:
-            _last_purge = _purge_stale(_session_counts, _last_purge, now)
-            entry = _session_counts.get(owner)
-            used = entry[0] if entry else 0
-            if used >= DEMO_MAX_MESSAGES_PER_SESSION:
-                return LIMIT_MESSAGE
-            _session_counts[owner] = [used + 1, now]
     return None
 
 
